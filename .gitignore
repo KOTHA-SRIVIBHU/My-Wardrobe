@@ -1,0 +1,24 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets and local data: never commit these
+.env
+.env.*
+!.env.example
+backend/closetiq.db
+backend/*.db
+backend/uploads/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vercel/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

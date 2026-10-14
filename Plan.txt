@@ -1,0 +1,803 @@
+# ClosetIQ — Complete Product Requirements and Development Plan
+
+**Version:** 3.0  
+**Status:** Draft for review  
+**Product type:** Personal wardrobe management and intelligent clothing planner  
+**Architecture:** Cloud-based web application  
+**Cost objective:** Free-tier hosting, database, weather services, and AI APIs, with no paid services required for core functionality.
+
+---
+
+# 1. Product Vision
+
+ClosetIQ is a personal wardrobe intelligence platform that manages clothing throughout its entire lifecycle: adding new garments, organizing outfits, wearing clothes, managing laundry baskets, washing, drying, ironing, and returning garments to use.
+
+The application combines:
+
+- A digital wardrobe with photographs and custom labels.
+- Manually created clothing pairs.
+- AI-assisted outfit recommendations.
+- Natural-language lifestyle and clothing requirements.
+- Weather-aware outfit suggestions.
+- Calendar-aware planning.
+- Laundry baskets with scheduling and progress tracking.
+- Garment-level washing, drying, and ironing states.
+- Weekly and long-term clothing schedules.
+
+The goal is to generate a realistic, continuously updated clothing plan that respects the garments the user actually owns and their real-world availability.
+
+## Core principles
+
+1. **Availability first:** Never recommend a garment that is unavailable.
+2. **User control:** Every AI-generated suggestion can be reviewed or overridden.
+3. **Routine-aware:** Understand the user's recurring clothing requirements.
+4. **Calendar-aware:** Adapt to holidays, parties, workdays, and schedule changes.
+5. **Laundry-aware:** Understand which clothes are waiting, being washed, drying, or awaiting ironing.
+6. **Cloud-based:** Store wardrobe data and photographs in hosted services.
+7. **Free-first:** Avoid paid APIs and infrastructure for core functionality.
+8. **Graceful degradation:** Essential wardrobe, laundry, and planning features continue working when an AI API reaches its quota.
+
+---
+
+# 2. Technology Stack
+
+| Component | Proposed technology | Purpose |
+|---|---|---|
+| Frontend | React, TypeScript, Tailwind CSS | Responsive user interface |
+| Backend | Python, FastAPI | Business logic and APIs |
+| Database | Supabase PostgreSQL | Wardrobe, baskets, routines, calendar, history |
+| Image storage | Supabase Storage | Clothing photographs |
+| AI | Free-tier vision-capable AI API | Image classification, natural-language interpretation, styling |
+| Weather | Open-Meteo | Forecast information |
+| Frontend hosting | Vercel or another suitable free tier | Application hosting |
+| Backend hosting | Suitable free-tier Python hosting | API hosting |
+| Version control | Git and GitHub | Source code management |
+
+Exact provider quotas and availability must be checked during implementation.
+
+No paid AI calls or automatic paid fallbacks should be permitted. API keys must remain on the backend.
+
+---
+
+# 3. Digital Wardrobe Management
+
+## 3.1 Adding garments
+
+Users can add individual garments with:
+
+- Photograph.
+- Name.
+- Category and subcategory.
+- Color and pattern.
+- Custom labels.
+- Occasion and formality.
+- Season and weather suitability.
+- Fabric and comfort details, where known.
+- Laundry and ironing requirements.
+- Purchase date and price, optionally.
+- Notes and personal preferences.
+
+Examples of categories include shirts, T-shirts, trousers, jeans, vests, underwear, socks, shoes, jackets, nightwear, and accessories.
+
+## 3.2 AI-assisted classification
+
+When a photograph is uploaded, AI can suggest the garment's category, color, pattern, occasion labels, formality, and weather suitability.
+
+The user must be able to review and correct these suggestions before saving.
+
+Manual entry must always be supported.
+
+## 3.3 Custom labels
+
+Users can create labels such as Office, College, Party, Casual, Nightwear, Travel, Gym, Rainy Weather, and Favorite.
+
+A garment may have multiple labels. Labels are used for filtering, outfit generation, and matching lifestyle requirements.
+
+## 3.4 Adding and removing garments
+
+Users can add new clothing whenever they want, edit existing garments, replace photographs, archive garments, or mark them as no longer owned.
+
+Archived garments must not appear in future recommendations, but historical wear records should remain available.
+
+---
+
+# 4. Garment Lifecycle and Availability
+
+Every garment must have a clearly defined current state.
+
+## 4.1 Garment states
+
+The proposed states are:
+
+1. **Ready to Wear:** Clean, available, and prepared for use.
+2. **Worn — Reusable:** Worn but still eligible for reuse under its configured rules.
+3. **Needs Laundry:** Requires washing before another use.
+4. **In Laundry Basket:** Assigned to a laundry basket and waiting for processing or collection.
+5. **In Laundry:** Its laundry basket is being processed.
+6. **Drying:** Washed but not yet ready for use.
+7. **Needs Ironing:** Clean but requires ironing before it can be considered ready.
+8. **Reserved:** Allocated to an upcoming event or protected outfit.
+9. **Unavailable:** Temporarily inaccessible, damaged, borrowed, or otherwise unusable.
+
+The user can manually update a garment's state.
+
+### Important distinction
+
+A garment can be clean but still unavailable because it is drying or needs ironing. Similarly, a garment in a pending laundry basket must not appear as an available outfit choice.
+
+The application must distinguish physical availability, cleanliness, and preparation requirements.
+
+## 4.2 Wear history
+
+For every garment, track:
+
+- Total number of wears.
+- Number of wears since the last wash.
+- Last worn date.
+- Last washed date.
+- Current state.
+- Upcoming scheduled uses.
+- Current laundry basket, if assigned.
+- Whether ironing is required.
+
+When the user marks an outfit as worn, the application updates the history of all garments in that outfit.
+
+Washing and reuse rules can differ by garment category. For example, socks and underwear generally require washing after use, while certain trousers and jackets may be reused.
+
+## 4.3 State transitions
+
+A typical lifecycle is:
+
+Ready to Wear → Worn → Reusable or Needs Laundry → In Laundry Basket → In Laundry → Drying → Needs Ironing or Ready to Wear.
+
+The exact transition depends on the garment's washing and ironing requirements.
+
+A user must be able to override the state when the real-world situation differs from the expected lifecycle.
+
+---
+
+# 5. Laundry Baskets — New Core Feature
+
+Laundry baskets are independent entities that organize garments into batches for planned laundry activities.
+
+A basket is more than a collection of garment IDs: it has its own schedule, status, contents, and completion history.
+
+## 5.1 Creating a basket
+
+Users can create any number of laundry baskets.
+
+Each basket contains:
+
+- Basket name.
+- Optional description.
+- Selected garments.
+- Scheduled laundry date.
+- Current basket status.
+- Optional estimated completion date and time.
+- Optional laundry notes.
+- Creation date.
+- Start date.
+- Completion date.
+- Garments successfully processed.
+
+Example basket names:
+
+- Monday Laundry.
+- Whites and Light Colors.
+- Weekend Laundry.
+- Office Clothes.
+- Urgent Laundry.
+
+Users should be free to organize baskets however they prefer.
+
+## 5.2 Adding clothes to a basket
+
+When a garment is added to a basket, its state must immediately change to **In Laundry Basket**.
+
+This transition must take effect as soon as the operation is successfully saved to the backend.
+
+Consequences:
+
+- The garment becomes unavailable for new outfit recommendations.
+- Future plans using the garment must be checked.
+- The weekly planner recalculates affected dates when appropriate.
+- The garment appears in the basket's contents.
+- The application records the state change in its history.
+
+If the garment is already assigned to another active laundry basket, the application must prevent duplicate assignment unless the user first removes it from the existing basket.
+
+The application should warn users when adding a garment that is reserved for an upcoming event.
+
+## 5.3 Removing clothes from a basket
+
+Users must be able to remove a garment from a basket that has not yet been processed.
+
+When a garment is removed, the application should restore its previous valid state, unless the user chooses a different state.
+
+For example:
+
+- A garment that was ready to wear returns to Ready to Wear.
+- A garment that already needed washing returns to Needs Laundry.
+- A garment reserved for an event may return to its appropriate reserved state if the reservation is still valid.
+
+The application must preserve state history rather than simply assuming every removed garment is clean.
+
+Removing garments from a basket that is already in progress requires confirmation, because the laundry process may already have started.
+
+## 5.4 Basket statuses
+
+Each basket has one of three primary statuses:
+
+**Pending**
+- The basket has been created.
+- It may have a scheduled date.
+- Its contents are waiting to be processed.
+- All assigned garments remain in the In Laundry Basket state.
+
+**In Progress**
+- Laundry processing has started.
+- The basket records its start date and time.
+- Its garments are unavailable for use.
+- The user can review the basket contents and update processing details.
+
+**Completed**
+- The user confirms that the laundry batch has been completed.
+- The completion date and time are recorded.
+- Garment wear counts since the last wash are reset.
+- The last washed date is updated.
+- Each garment moves to its appropriate post-laundry state.
+- The basket's completion history is retained.
+
+A completed basket should not automatically be reopened when a new basket is created.
+
+## 5.5 Scheduling a basket
+
+Users can assign a scheduled date and optionally an expected completion time.
+
+The application can then:
+
+- Show upcoming laundry batches on a calendar.
+- Remind the user when a basket is due.
+- Warn if the basket contains garments needed for upcoming outfits.
+- Estimate which garments will remain available during the laundry period.
+- Update weekly plans based on the expected processing schedule.
+
+The scheduled date is a plan, not proof that laundry has started. The basket changes to In Progress only when the user starts it or explicitly authorizes a configured automatic transition.
+
+## 5.6 Basket completion and garment refresh
+
+When the user marks a basket as completed, the application must refresh the garments included in that batch.
+
+For each successfully processed garment:
+
+1. Reset the wear count since the last wash to zero.
+2. Update the last washed date.
+3. Record the completed laundry batch.
+4. Remove the active basket assignment.
+5. Recalculate the garment's post-laundry state.
+6. Revalidate any future outfit reservations and schedules.
+
+The post-laundry state depends on preparation requirements:
+
+- If the garment is dry and needs no ironing, mark it Ready to Wear.
+- If it is still drying, mark it Drying.
+- If it needs ironing, mark it Needs Ironing.
+- If the garment is damaged or otherwise unavailable, preserve the appropriate unavailable state.
+
+**Important:** Completing a basket must not automatically make every garment Ready to Wear if it still needs drying or ironing.
+
+The user can confirm the final condition of the batch or update individual garments after completion.
+
+## 5.7 Basket dashboard
+
+The laundry section should show:
+
+- Pending baskets.
+- Baskets due today.
+- In-progress baskets.
+- Completed baskets.
+- Scheduled dates.
+- Expected completion times.
+- Number of garments per basket.
+- Garments awaiting ironing.
+- Laundry-related scheduling warnings.
+
+Users should be able to filter and sort baskets by date, status, and name.
+
+## 5.8 Laundry reminders
+
+Examples:
+
+- "Your Monday Laundry basket is due today."
+- "Three office shirts in your basket are required later this week."
+- "Your laundry is still marked In Progress."
+- "Two washed garments still need ironing."
+
+Reminders must be configurable to avoid unnecessary notifications.
+
+---
+
+# 6. Ironing Management
+
+Ironing is a separate preparation stage in the clothing lifecycle.
+
+## 6.1 Garment-level ironing requirement
+
+Each garment can have an ironing policy:
+
+- Ironing not required.
+- Ironing required after washing.
+- Ironing optional.
+- User decides after washing.
+
+The policy should be configurable per garment or category.
+
+## 6.2 Needs Ironing state
+
+A garment enters Needs Ironing when it has been washed and is dry but requires ironing before it should be worn.
+
+Such a garment must be excluded from immediately wearable outfit recommendations.
+
+The application may show it as a possible future outfit if ironing can be completed before the planned use.
+
+## 6.3 Ironing actions
+
+Users should be able to:
+
+- Mark a garment as needing ironing.
+- Mark it as ironed.
+- Update its state to Ready to Wear after ironing.
+- Select several garments and mark them ironed together.
+- View a list of garments awaiting ironing.
+- See when an upcoming outfit depends on a garment needing ironing.
+
+Completing ironing must not reset the wear count or change the last washed date. Only a washing operation resets the wear count since the last wash.
+
+## 6.4 Ironing reminders
+
+Examples:
+
+- "Your formal shirt for tomorrow still needs ironing."
+- "Four clean garments are waiting to be ironed."
+- "Your planned office outfit is unavailable until ironing is completed."
+
+Ironing reminders should use the calendar and weekly plan to prioritize garments needed soon.
+
+---
+
+# 7. Manual Pairs and Outfit Management
+
+## 7.1 Manually created pairs
+
+Users can manually select a specific shirt and trousers, name the combination, and save it as a preferred pair.
+
+A pair can include shoes, jackets, and accessories.
+
+Each pair supports:
+
+- Name and description.
+- Selected garments.
+- Labels and occasion.
+- Favorite status.
+- Notes.
+- Editing, duplication, and deletion.
+
+Manually created pairs must be preserved as defined by the user.
+
+## 7.2 AI-generated outfits
+
+AI or a recommendation engine can generate combinations using the user's wardrobe.
+
+Candidate outfits are ranked by:
+
+- Color compatibility.
+- Formality and occasion.
+- Weather suitability.
+- Personal preferences.
+- Previous ratings.
+- Recent repetition.
+- Current availability.
+
+AI-generated outfits remain separate from manually saved pairs. Users can save generated outfits as new pairs.
+
+## 7.3 Availability validation
+
+An outfit is immediately wearable only when every required garment is available and properly prepared.
+
+An outfit must be rejected as immediately wearable if any required garment is:
+
+- In a laundry basket.
+- In laundry.
+- Drying.
+- Needs laundry.
+- Needs ironing.
+- Otherwise unavailable.
+
+A garment reserved for another incompatible event must also be excluded.
+
+The application may suggest the outfit as a future possibility if the relevant garment can become ready in time.
+
+---
+
+# 8. Lifestyle Rules and Natural-Language Planning
+
+Users should be able to explain their clothing requirements in natural language.
+
+Example:
+
+"Monday to Friday, I go to the office. Every day I need one formal shirt, one T-shirt, one vest, one pair of underwear, and one pair of socks. I use the same office shoes throughout the month. Every night from Sunday to Saturday, I wear a nightwear pair."
+
+The AI converts the description into structured rules for review.
+
+## 8.1 Routine structure
+
+Each routine contains:
+
+- Routine name.
+- Applicable weekdays.
+- Start and end dates.
+- Required categories and quantities.
+- Occasion and labels.
+- Garment reuse duration.
+- Washing and ironing requirements.
+- Mandatory or flexible status.
+- Optional consecutive-day reuse restrictions.
+
+## 8.2 Interpretation workflow
+
+1. The user describes a routine.
+2. AI extracts days, categories, quantities, and usage rules.
+3. The application presents the interpreted rules.
+4. The user edits or confirms them.
+5. The planning engine checks wardrobe feasibility.
+6. The system generates a schedule.
+7. The user can change the rules and regenerate affected dates.
+
+If the description is ambiguous, the application asks for clarification.
+
+## 8.3 Laundry-aware routines
+
+The planning engine must consider whether routine requirements can be satisfied while garments are unavailable for washing, drying, or ironing.
+
+For example, if the user needs a clean formal shirt every weekday, the planner must ensure enough shirts are available or schedule laundry early enough to return garments to use.
+
+Shoe reuse, nightwear, underwear, and socks must each follow their configured usage rules.
+
+---
+
+# 9. Weather and Personal Comfort
+
+The application uses current and forecast conditions where available:
+
+- Temperature.
+- Feels-like temperature.
+- Rain probability.
+- Humidity.
+- Wind.
+- Expected conditions during outdoor activities.
+
+Users can manually report today's conditions as hot, cold, rainy, humid, windy, or comfortable.
+
+Manual reports should influence recommendations without overwriting external forecast data.
+
+The system can learn personal preferences from explicit feedback, such as preferring lighter clothing in hot weather.
+
+Weather data must not override clothing availability or mandatory event requirements.
+
+---
+
+# 10. Calendar and Events
+
+Users can create events such as office days, college, holidays, parties, interviews, weddings, travel, gym sessions, and custom occasions.
+
+Each event may include:
+
+- Date and time.
+- Dress code.
+- Labels.
+- Notes.
+- Required garments.
+- Optional reserved outfit.
+
+## 10.1 Automatic replanning
+
+When Wednesday becomes a holiday, the planner removes the normal office requirements for that date.
+
+When a party is added, the planner suggests suitable clothing and checks garment availability.
+
+When an event is cancelled or moved, its reservations are released and the plan is recalculated.
+
+## 10.2 Conflict handling
+
+The application detects:
+
+- Garments reserved for incompatible events.
+- Garments in laundry that are required soon.
+- Clean garments that still need ironing.
+- Insufficient inventory after calendar changes.
+- Laundry completion dates that conflict with important events.
+
+The user can lock an outfit, replace a suggestion, regenerate selected dates, or approve proposed changes.
+
+---
+
+# 11. Laundry-Aware Weekly and Long-Term Planning
+
+The planner generates realistic clothing schedules for the next seven days or a custom period.
+
+It considers:
+
+- Lifestyle rules.
+- Calendar events.
+- Weather.
+- Manual pairs.
+- Generated outfits.
+- Garment availability.
+- Active laundry baskets.
+- Scheduled laundry dates.
+- Expected completion dates.
+- Drying and ironing requirements.
+- Reuse and washing rules.
+- Personal preferences.
+- Outfit repetition.
+
+## 11.1 Laundry simulation
+
+Before starting a basket, the user can simulate its effect on future plans.
+
+The application reports:
+
+- Which garments will become unavailable.
+- Which outfits remain possible.
+- Whether the upcoming week can be covered.
+- Which categories are becoming scarce.
+- Which events may be affected.
+- Whether drying or ironing is likely to create a shortage.
+
+## 11.2 Feasibility reporting
+
+Examples:
+
+- "Five clean formal shirts are required, but only three are available."
+- "Your planned Friday shirt is in the Monday Laundry basket."
+- "Your party outfit requires a shirt that still needs ironing."
+- "Your current socks inventory is insufficient for the selected period."
+
+The system must propose feasible alternatives rather than inventing garment availability.
+
+## 11.3 Partial replanning
+
+When a basket is created, its scheduled date changes, or it is completed, the planner should identify affected dates.
+
+Locked outfits and unrelated user decisions should be preserved unless the user approves changes.
+
+---
+
+# 12. Additional Features
+
+## Wardrobe analytics
+
+- Total and available garments.
+- Most and least used items.
+- Wear frequency.
+- Outfit repetition.
+- Category shortages.
+- Laundry frequency.
+- Number of garments awaiting ironing.
+- Cost per wear when purchase prices are available.
+
+## Smart packing
+
+Generate a packing list for a trip based on duration, weather, activities, available clothing, and washing opportunities.
+
+## Before-you-buy analysis
+
+Evaluate a proposed garment against the existing wardrobe and estimate the new combinations it could enable.
+
+## Backup and restoration
+
+Support export and restoration of garments, photographs where supported, pairs, routines, laundry history, basket records, settings, and wear history.
+
+## Notifications
+
+Provide configurable reminders for laundry baskets, drying, ironing, upcoming events, and planned outfits.
+
+---
+
+# 13. Cloud Architecture
+
+## 13.1 Data flow
+
+1. The React frontend sends authenticated requests to FastAPI.
+2. The backend validates ownership and business rules.
+3. Supabase PostgreSQL stores the structured data.
+4. Supabase Storage stores clothing photographs.
+5. AI requests are sent through a backend-only provider integration.
+6. Weather information is retrieved from the selected weather service.
+7. The planning engine evaluates routines, calendar events, garment availability, baskets, and preparation states.
+8. The frontend displays updated recommendations and schedules.
+
+## 13.2 Database entities
+
+The database should include:
+
+- Users and preferences.
+- Garments.
+- Garment images.
+- Categories and labels.
+- Wear history and lifecycle events.
+- Laundry baskets.
+- Laundry basket garment assignments.
+- Laundry batch history.
+- Manual pairs.
+- Outfits.
+- Lifestyle rules.
+- Calendar events.
+- Planned outfits and garment allocations.
+- Notifications.
+- AI interpretation records where necessary.
+
+### Laundry basket data
+
+Each basket should include:
+
+- Basket ID.
+- User ID.
+- Name and description.
+- Scheduled date and time.
+- Expected completion date and time.
+- Status: Pending, In Progress, or Completed.
+- Created timestamp.
+- Started timestamp.
+- Completed timestamp.
+- Optional notes.
+
+Each basket-to-garment assignment should record the garment, basket, assignment time, previous state, processing outcome, and relevant history.
+
+A garment must not belong to two active laundry baskets simultaneously.
+
+## 13.3 Data consistency
+
+Adding a garment to a basket must update its availability and basket assignment as one logical operation.
+
+Completing a basket must update all affected garments, reset their wear counts since washing, record washing dates, and update the basket status consistently.
+
+The backend should use database transactions where appropriate so partial failures do not leave garments and baskets in contradictory states.
+
+## 13.4 Security and privacy
+
+- Keep credentials on the backend.
+- Use authentication and row-level access policies.
+- Restrict access to each user's garments and images.
+- Avoid sending unnecessary personal information to AI services.
+- Disclose external data processing.
+- Support data export and deletion.
+
+---
+
+# 14. AI and Deterministic Logic
+
+AI handles tasks that benefit from language or image understanding:
+
+- Clothing classification.
+- Natural-language lifestyle interpretation.
+- Styling suggestions.
+- Recommendation explanations.
+- Conversational plan changes.
+
+Deterministic backend logic handles:
+
+- Availability.
+- Wear counts.
+- Laundry basket status.
+- Laundry completion.
+- Drying and ironing transitions.
+- Calendar conflicts.
+- Garment reservations.
+- Inventory feasibility.
+- Schedule validation.
+- Persistence of approved changes.
+
+AI must not independently override availability rules or fabricate garments.
+
+## Free-tier quota handling
+
+When an AI provider reaches its quota:
+
+- Existing wardrobe functionality remains available.
+- Confirmed routines can still generate schedules.
+- Manual pairs remain usable.
+- Laundry baskets can be managed.
+- Ironing and wear statuses can be updated.
+- The application explains which AI feature is unavailable.
+- The user can retry later or use manual alternatives.
+
+There must be no silent fallback to a paid API.
+
+---
+
+# 15. Development Roadmap
+
+### Phase 1 — Foundation
+Create the frontend, backend, authentication, database, image storage, and garment management.
+
+### Phase 2 — Lifecycle and manual pairs
+Implement garment states, wear tracking, manual pairs, and editing.
+
+### Phase 3 — Laundry baskets and ironing
+Implement basket creation, garment assignment, scheduling, Pending/In Progress/Completed statuses, state transitions, laundry completion, and ironing management.
+
+### Phase 4 — Outfit intelligence
+Add AI-assisted classification, outfit generation, compatibility scoring, history, and explanations.
+
+### Phase 5 — Lifestyle rules
+Implement natural-language routine interpretation, structured rule editing, and inventory validation.
+
+### Phase 6 — Calendar and weather
+Add events, holidays, weather forecasts, and manual condition updates.
+
+### Phase 7 — Weekly and laundry-aware planning
+Build the seven-day planner, laundry simulation, shortage detection, and conflict resolution.
+
+### Phase 8 — Advanced features
+Add wardrobe analytics, personal preference learning, travel packing, purchase analysis, and notifications.
+
+### Phase 9 — Testing and deployment
+Test lifecycle transitions, basket completion, inventory shortages, calendar conflicts, AI failures, access controls, backups, and mobile usability.
+
+---
+
+# 16. Acceptance Criteria
+
+The initial release is complete when:
+
+1. Users can add, edit, archive, and manage garments.
+2. Users can manually create and modify clothing pairs.
+3. Adding a garment to a basket immediately changes its state to In Laundry Basket.
+4. A garment cannot belong to two active laundry baskets simultaneously.
+5. Baskets support scheduling and Pending, In Progress, and Completed states.
+6. Removing an unprocessed garment restores its appropriate previous state.
+7. Completing a basket updates washing dates and resets wear counts.
+8. Completion does not incorrectly mark drying or ironing garments as Ready to Wear.
+9. Users can mark garments as Needs Ironing and update them after ironing.
+10. AI-generated outfits exclude unavailable garments.
+11. Natural-language routines become editable, structured requirements.
+12. The system detects insufficient inventory before confirming an impossible schedule.
+13. Weather and calendar changes trigger appropriate recommendations and replanning.
+14. Laundry simulation identifies which outfits remain possible.
+15. The weekly planner respects basket schedules, drying, ironing, and reuse rules.
+16. Locked outfits are preserved during unrelated changes.
+17. Cloud data is protected by authentication and appropriate access policies.
+18. Core functionality remains available when AI quotas are exhausted.
+19. Users can export and restore their wardrobe and laundry data.
+
+---
+
+# 17. Out of Scope for the Initial Release
+
+The initial version does not require:
+
+- A public community or social network.
+- A clothing marketplace.
+- Paid AI APIs.
+- Paid cloud infrastructure.
+- Advanced virtual try-on.
+- Automatic physical laundry detection.
+- Calendar integrations without explicit authorization.
+- Perfect AI fashion judgment.
+
+These can be considered later if they justify their complexity.
+
+---
+
+# 18. Definition of Success
+
+ClosetIQ succeeds when a user can maintain a digital wardrobe, describe their clothing routines, create manual pairs, receive weather-aware recommendations, track laundry baskets, manage ironing, and generate realistic weekly plans that adapt to real-world changes.
+
+Its defining capability is not simply recommending attractive outfits. It is producing a feasible, personalized clothing plan based on the user's actual garments, routine, calendar, and preparation status.
+
+**Recommended implementation order:**
+
+Digital wardrobe → Clothing lifecycle → Manual pairs → Laundry baskets and ironing → Outfit intelligence → Lifestyle rules → Calendar and weather → Laundry-aware scheduling → Advanced features.
+
+This document is the proposed baseline for review before implementation begins.

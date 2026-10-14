@@ -1,0 +1,35 @@
+// Small stroke icon set (24px grid, inherits text colour).
+const PATHS = {
+  home: ['M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+  plan: ['M8 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2', 'M9 3h6v3H9z', 'm9 13.5 2 2 4-4'],
+  hanger: ['M10 6a2 2 0 1 1 3 1.73c-.62.36-1 .9-1 1.6V10', 'M12 10 3.4 16.3a1 1 0 0 0 .6 1.7h16a1 1 0 0 0 .6-1.7z'],
+  sparkle: ['M12 3.5l2.4 5.1 5.6.8-4.1 3.9 1 5.6-4.9-2.7-4.9 2.7 1-5.6-4.1-3.9 5.6-.8z'],
+  layers: ['M12 3 3 8l9 5 9-5z', 'm3 13 9 5 9-5'],
+  washer: ['M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z', 'M12 17.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9z', 'M8 6.5h.01M11 6.5h3'],
+  repeat: ['m17 2 3 3-3 3', 'M4 11V9a4 4 0 0 1 4-4h12', 'm7 22-3-3 3-3', 'M20 13v2a4 4 0 0 1-4 4H4'],
+  calendar: ['M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M16 3v4M8 3v4M3 10h18'],
+  chart: ['M5 20v-9M11 20V5M17 20v-6M3 20h18'],
+  bell: ['M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z', 'M10 20.5a2 2 0 0 0 4 0'],
+  grid: ['M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z'],
+  list: ['M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01'],
+  search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z', 'm20 20-4-4'],
+  plus: ['M12 5v14M5 12h14'],
+  iron: ['M3 18h14a4 4 0 0 0 4-4v-3a2 2 0 0 0-2-2h-9a7 7 0 0 0-7 7z', 'M12 6h7', 'M8 14h.01M11 14h.01'],
+  left: ['m15 18-6-6 6-6'],
+  right: ['m9 18 6-6-6-6'],
+  alert: ['M12 9v4M12 17h.01', 'M10.3 3.9 2.4 17.5A2 2 0 0 0 4.1 20.5h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'],
+  check: ['M20 6 9 17l-5-5'],
+  logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5M21 12H9'],
+} as const
+
+export type IconName = keyof typeof PATHS
+
+export function Icon({ name, className = 'h-5 w-5' }: { name: IconName; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      {PATHS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  )
+}

@@ -1,0 +1,47 @@
+# Render blueprint for the ClosetIQ API (free web service).
+# Values marked `sync: false` are secrets: Render asks for them when you create the
+# service from this blueprint (Dashboard -> New -> Blueprint). See DEPLOY.md.
+services:
+  - type: web
+    name: closetiq-api
+    runtime: python
+    plan: free
+    region: singapore # pick the region closest to your Supabase project
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: ENVIRONMENT
+        value: production
+      - key: AUTH_MODE
+        value: supabase
+      - key: STORAGE_MODE
+        value: supabase
+      - key: SUPABASE_BUCKET
+        value: garment-images
+      - key: GROQ_VISION_MODEL
+        value: qwen/qwen3.8-27b
+      - key: GROQ_TEXT_MODEL
+        value: openai/gpt-oss-120b
+      # Fair-use limits for open sign-up.
+      - key: AI_DAILY_LIMIT_PER_USER
+        value: "40"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "240"
+      - key: MAX_GARMENTS_PER_USER
+        value: "1500"
+      # Secrets.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
