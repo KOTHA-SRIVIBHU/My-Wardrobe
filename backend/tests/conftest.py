@@ -30,17 +30,35 @@ os.environ["GROQ_TEXT_MODEL"] = "openai/gpt-oss-120b"
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.db import Base, engine
 from app.main import app
 
 
-@pytest.fixture
-def client():
+def _reset_database() -> None:
+    if engine.dialect.name == "postgresql":
+        # One round trip instead of dropping and recreating every table (remote DBs are slow).
+        names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+        with engine.begin() as conn:
+            conn.execute(text(f"TRUNCATE {names} CASCADE"))
+    else:
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+
+
+@pytest.fixture(scope="session")
+def _app_client():
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
-    with TestClient(app) as c:
+    with TestClient(app) as c:  # app startup (schema checks) runs once
         yield c
+
+
+@pytest.fixture
+def client(_app_client):
+    _reset_database()
+    yield _app_client
 
 
 @pytest.fixture
