@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { mediaUrl } from '../lib/api'
+import { usePhoto } from '../lib/api'
 import { BASKET_COLORS, BASKET_LABELS, STATE_COLORS, STATE_DOT, STATE_LABELS, STATE_SHORT, WEEKDAY_SHORT, cssColor } from '../lib/format'
 import type { BasketStatus, Garment, GarmentState } from '../lib/types'
 
@@ -79,7 +79,7 @@ export function GarmentThumb({
     lg: 'aspect-square w-full text-5xl rounded-lg',
     card: 'aspect-[4/5] w-full text-3xl',
   }[size]
-  const url = mediaUrl(garment.image_url)
+  const url = usePhoto(garment.photo_id) ?? garment.image_url
   if (url) return <img src={url} alt={garment.name} loading="lazy" className={`${cls} shrink-0 bg-slate-100 object-cover`} />
   // No photo: a soft tint of the garment's colour behind its category icon.
   const tint = cssColor(garment.color)

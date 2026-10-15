@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMeta } from '../App'
 import { GarmentForm } from '../components/GarmentForm'
+import { PhotoPicker } from '../components/PhotoPicker'
 import { ErrorBanner, GarmentThumb, Modal, Spinner, StateBadge } from '../components/ui'
 import { api } from '../lib/api'
 import { STATE_LABELS, capitalize, fmtDate, fmtDateTime, localToday, useLoad } from '../lib/format'
@@ -50,19 +51,10 @@ export default function GarmentDetail() {
       <div className="mt-3 grid gap-6 md:grid-cols-[280px_1fr]">
         <div className="space-y-3">
           <GarmentThumb garment={g} size="lg" />
-          <label className="btn btn-secondary w-full cursor-pointer">
-            {g.image_url ? 'Replace photo' : 'Add photo'}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) run(() => api.uploadImage(g.id, file))
-              }}
-            />
-          </label>
-          {g.image_url && (
+          <PhotoPicker className="btn btn-secondary w-full" onPick={(file) => run(() => api.uploadImage(g.id, file))}>
+            {g.photo_id ? 'Replace photo' : 'Add photo'}
+          </PhotoPicker>
+          {g.photo_id && (
             <button className="btn btn-secondary w-full" onClick={() => run(() => api.deleteImage(g.id))}>
               Remove photo
             </button>

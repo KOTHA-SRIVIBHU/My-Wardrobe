@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAi, useMeta } from '../App'
+import { useMeta } from '../App'
 import { Chip, ErrorBanner, GarmentThumb, Spinner } from '../components/ui'
-import { api, downloadBackup } from '../lib/api'
-import { supabase } from '../lib/auth'
+import { api } from '../lib/api'
 import { addDays, capitalize, categoryTitle, fmtDate, fmtDateTime, localToday, useLoad } from '../lib/format'
 import type { Analytics, PackingResult, PurchaseResult } from '../lib/types'
 
-const TABS = ['Stats', 'Declutter', 'Pack for a trip', 'Before you buy', 'Account'] as const
+const TABS = ['Stats', 'Declutter', 'Pack for a trip', 'Before you buy'] as const
 type Tab = (typeof TABS)[number]
 
 export default function Insights() {
@@ -32,7 +31,6 @@ export default function Insights() {
       {tab === 'Declutter' && <Declutter />}
       {tab === 'Pack for a trip' && <Packing />}
       {tab === 'Before you buy' && <BeforeYouBuy />}
-      {tab === 'Account' && <Backup />}
     </div>
   )
 }
@@ -430,115 +428,6 @@ function BeforeYouBuy() {
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-// --- Backup ---------------------------------------------------------------------------
-
-function Backup() {
-  const ai = useAi()
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
-  const [email, setEmail] = useState<string | null>(null)
-  useEffect(() => {
-    supabase?.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null))
-  }, [])
-
-  async function exportNow() {
-    setBusy(true)
-    setError(null)
-    try {
-      await downloadBackup()
-      setMessage('Backup downloaded. Keep it somewhere safe.')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function restore(file: File) {
-    if (!confirm('Restoring replaces EVERYTHING currently in ClosetIQ (garments, baskets, plans…) with the backup. Continue?')) return
-    setBusy(true)
-    setError(null)
-    try {
-      const r = await api.importBackup(file)
-      setMessage(`Restored ${r.restored.garments ?? 0} garments, ${r.restored.pairs ?? 0} pairs, ${r.restored.laundry_baskets ?? 0} baskets and ${r.restored.routines ?? 0} routines.`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function deleteAccount() {
-    if (confirmText !== 'DELETE') return
-    setBusy(true)
-    setError(null)
-    try {
-      await api.deleteAccount()
-      if (supabase) await supabase.auth.signOut()
-      else window.location.assign('/')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="max-w-xl space-y-4">
-      <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      {message && <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
-      <section className="card p-4">
-        <h2 className="mb-1 font-semibold">Your account</h2>
-        <p className="text-sm text-slate-600">{email ?? 'Local mode (no sign-in)'}</p>
-        {ai?.enabled && (
-          <p className="mt-1 text-sm text-slate-600">
-            AI requests today: {ai.used_today} of {ai.daily_limit}
-          </p>
-        )}
-      </section>
-      <section className="card p-4">
-        <h2 className="mb-1 font-semibold">Export</h2>
-        <p className="mb-3 text-sm text-slate-600">
-          Download everything as one file: garments with photos, pairs, laundry history, routines, calendar, plans and settings.
-        </p>
-        <button className="btn btn-primary" disabled={busy} onClick={exportNow}>Download backup</button>
-      </section>
-      <section className="card p-4">
-        <h2 className="mb-1 font-semibold">Restore</h2>
-        <p className="mb-3 text-sm text-slate-600">Replace your current data with a backup file. This can't be undone, so export first if unsure.</p>
-        <label className="btn btn-danger cursor-pointer">
-          Choose backup file…
-          <input
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              e.target.value = ''
-              if (f) restore(f)
-            }}
-          />
-        </label>
-      </section>
-      <section className="card border-red-200 p-4">
-        <h2 className="mb-1 font-semibold text-red-800">Delete account</h2>
-        <p className="mb-3 text-sm text-slate-600">
-          Permanently deletes your wardrobe, photos, plans and history{supabase ? ', and your login' : ''}. Export a backup first if
-          you might want it later. Type <strong>DELETE</strong> to confirm.
-        </p>
-        <div className="flex gap-2">
-          <input className="input max-w-40" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="DELETE" aria-label="Type DELETE to confirm" />
-          <button className="btn btn-danger" disabled={busy || confirmText !== 'DELETE'} onClick={deleteAccount}>
-            Delete everything
-          </button>
-        </div>
-      </section>
     </div>
   )
 }

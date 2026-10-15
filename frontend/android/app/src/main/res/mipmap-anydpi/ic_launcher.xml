@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 7.x launcher icon (8+ uses the adaptive icon). -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval"><solid android:color="@color/ic_launcher_background" /></shape>
+    </item>
+    <item android:drawable="@drawable/ic_closetiq_foreground" />
+</layer-list>

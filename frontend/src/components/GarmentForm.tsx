@@ -4,6 +4,7 @@ import { api, downscaleImage, type GarmentInput } from '../lib/api'
 import { capitalize } from '../lib/format'
 import type { Classification, Garment, IroningPolicy, Meta } from '../lib/types'
 import { ErrorBanner, Modal, TagInput } from './ui'
+import { PhotoPicker, PhotoPreview } from './PhotoPicker'
 
 const IRONING_LABELS: Record<IroningPolicy, string> = {
   not_required: 'Not required',
@@ -166,18 +167,12 @@ export function GarmentForm({
       <form id="garment-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         {!garment && (
           <div className="sm:col-span-2 rounded-lg border border-dashed border-slate-300 p-3">
-            <label className="label" htmlFor="g-photo">Photo (optional)</label>
+            <p className="label">Photo (optional)</p>
             <div className="flex flex-wrap items-center gap-3">
-              <input
-                id="g-photo"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="min-w-0 flex-1 text-sm"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  setPhoto(file ? await downscaleImage(file, 1280) : null)
-                }}
-              />
+              <PhotoPicker onPick={async (file) => setPhoto(await downscaleImage(file, 1280))}>
+                {photo ? 'Change photo' : '📷 Add photo'}
+              </PhotoPicker>
+              {photo && <PhotoPreview file={photo} />}
               {ai?.enabled && (
                 <button type="button" className="btn btn-secondary" disabled={!photo || suggesting} onClick={suggest}>
                   {suggesting ? 'Looking…' : '✨ Suggest details'}
@@ -185,7 +180,7 @@ export function GarmentForm({
               )}
             </div>
             {ai && !ai.enabled && (
-              <p className="mt-2 text-xs text-slate-500">AI suggestions are off (no Groq key on the server). You can fill the details in yourself.</p>
+              <p className="mt-2 text-xs text-slate-500">AI suggestions are off (add a Groq key in Settings). You can fill the details in yourself.</p>
             )}
           </div>
         )}

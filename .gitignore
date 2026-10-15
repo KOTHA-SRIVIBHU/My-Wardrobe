@@ -22,3 +22,9 @@ frontend/.vercel/
 .idea/
 Thumbs.db
 .DS_Store
+frontend/tsconfig.tsbuildinfo
+
+# Android signing keys: never commit (kept outside the repo, added as GitHub secrets)
+*.p12
+*.jks
+*.keystore

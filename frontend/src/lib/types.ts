@@ -46,6 +46,7 @@ export interface GarmentFields {
 export interface Garment extends GarmentFields {
   id: string
   image_url: string | null
+  photo_id: string | null
   state: GarmentState
   iron_after_drying: boolean
   total_wears: number

@@ -1,247 +1,191 @@
-import { getAccessToken, supabase } from './auth'
+// The app's data API. Same calls the pages always used, now answered on the device by
+// the wardrobe service (talking to the user's own Supabase vault).
+import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
+import { useEffect, useState } from 'react'
+import { ApiError } from '../engine/errors'
+import type { GarmentFilters, GarmentInput } from '../engine/service'
+import { getService, isNative } from './connection'
 import type {
-  AiStatus,
-  Analytics,
-  Brief,
-  Coverage,
-  PackingResult,
-  PurchaseResult,
-  Reminder,
-  Basket,
-  CalendarEvent,
-  CalendarEventInput,
-  Feasibility,
-  Plan,
-  Routine,
-  RoutineDraft,
-  RoutineInput,
-  Settings,
-  Simulation,
-  WeatherDay,
-  Classification,
-  Explanation,
-  Outfit,
-  OutfitRequest,
-  BasketMutation,
-  Dashboard,
-  Garment,
-  GarmentEvent,
-  GarmentFields,
-  GarmentState,
-  Meta,
-  Pair,
-  WashResult,
+  Basket, BasketStatus, CalendarEventInput, GarmentFields, GarmentState, OutfitRequest, Pair, RoutineInput,
+  Settings, WashResult,
 } from './types'
 
-const BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? '').replace(/\/$/, '')
+export { ApiError }
+export type { GarmentFilters, GarmentInput }
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-    public code?: string,
-  ) {
-    super(message)
-  }
-}
+const svc = () => getService()
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {}
-  const token = await getAccessToken()
-  if (token) headers.Authorization = `Bearer ${token}`
-  let payload: BodyInit | undefined
-  if (body instanceof FormData) {
-    payload = body
-  } else if (body !== undefined) {
-    headers['Content-Type'] = 'application/json'
-    payload = JSON.stringify(body)
-  }
-  const res = await fetch(BASE + path, { method, headers, body: payload })
-  if (res.status === 401 && supabase) {
-    // Session expired or revoked: back to the sign-in screen.
-    await supabase.auth.signOut()
-  }
-  if (res.status === 204) return undefined as T
-  const data = await res.json().catch(() => null)
-  if (!res.ok) {
-    const detail = data?.detail
-    const message =
-      typeof detail === 'string'
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((d: { msg: string }) => d.msg).join('; ')
-          : res.statusText || 'Request failed'
-    throw new ApiError(res.status, message, data?.code)
-  }
-  return data as T
-}
-
-function qs(params: Record<string, string | boolean | undefined | null>): string {
-  const p = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v))
-  const s = p.toString()
-  return s ? `?${s}` : ''
-}
-
-/** Local-storage photo URLs come back relative to the API. */
+/** Kept for older call sites: photo URLs are already displayable. */
 export function mediaUrl(url: string | null): string | null {
-  if (!url) return null
-  return url.startsWith('/') ? BASE + url : url
-}
-
-export type GarmentInput = Partial<GarmentFields> & { name: string; category: string }
-
-export interface GarmentFilters {
-  state?: GarmentState | ''
-  category?: string
-  label?: string
-  q?: string
-  wearable?: boolean
-  include_archived?: boolean
+  return url
 }
 
 export const api = {
-  meta: () => request<Meta>('GET', '/api/meta'),
-  labels: () => request<string[]>('GET', '/api/labels'),
-  dashboard: (today: string) => request<Dashboard>('GET', `/api/dashboard${qs({ today })}`),
+  meta: () => svc().meta(),
+  labels: () => svc().labels(),
+  dashboard: (today: string) => svc().dashboard(today),
 
-  garments: (f: GarmentFilters = {}) => request<Garment[]>('GET', `/api/garments${qs({ ...f })}`),
-  garment: (id: string) => request<Garment>('GET', `/api/garments/${id}`),
-  createGarment: (body: GarmentInput) => request<Garment>('POST', '/api/garments', body),
-  updateGarment: (id: string, body: Partial<GarmentFields>) => request<Garment>('PATCH', `/api/garments/${id}`, body),
-  deleteGarment: (id: string) => request<void>('DELETE', `/api/garments/${id}`),
-  uploadImage: (id: string, file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<Garment>('POST', `/api/garments/${id}/image`, form)
+  garments: (f: GarmentFilters = {}) => svc().garments(f),
+  garment: (id: string) => svc().garment(id),
+  createGarment: (body: GarmentInput) => svc().createGarment(body),
+  updateGarment: (id: string, body: Partial<GarmentFields>) => svc().updateGarment(id, body),
+  deleteGarment: (id: string) => svc().deleteGarment(id),
+  uploadImage: async (id: string, file: File) => {
+    const small = await downscaleImage(file, 900, 0.8)
+    const { mime, base64 } = await fileToBase64(small)
+    return svc().savePhoto(id, mime, base64)
   },
-  deleteImage: (id: string) => request<Garment>('DELETE', `/api/garments/${id}/image`),
-  history: (id: string) => request<GarmentEvent[]>('GET', `/api/garments/${id}/history`),
-  setState: (id: string, state: GarmentState, note?: string) =>
-    request<Garment>('POST', `/api/garments/${id}/state`, { state, note }),
-  archive: (id: string, reason: string) => request<Garment>('POST', `/api/garments/${id}/archive`, { reason }),
-  unarchive: (id: string) => request<Garment>('POST', `/api/garments/${id}/unarchive`),
+  deleteImage: (id: string) => svc().deleteImage(id),
+  history: (id: string) => svc().history(id),
+  setState: (id: string, state: GarmentState, note?: string) => svc().setState(id, state, note),
+  archive: (id: string, reason: string) => svc().archive(id, reason),
+  unarchive: (id: string) => svc().unarchive(id),
 
-  wear: (garment_ids: string[], worn_on?: string) =>
-    request<Garment[]>('POST', '/api/garments/actions/wear', { garment_ids, worn_on }),
-  wash: (garment_ids: string[], dry: boolean, needs_ironing?: boolean) =>
-    request<Garment[]>('POST', '/api/garments/actions/wash', { garment_ids, dry, needs_ironing }),
-  dried: (garment_ids: string[]) => request<Garment[]>('POST', '/api/garments/actions/dried', { garment_ids }),
-  needsIroning: (garment_ids: string[]) =>
-    request<Garment[]>('POST', '/api/garments/actions/needs-ironing', { garment_ids }),
-  ironed: (garment_ids: string[]) => request<Garment[]>('POST', '/api/garments/actions/ironed', { garment_ids }),
+  wear: (garmentIds: string[], wornOn?: string) => svc().wear(garmentIds, wornOn),
+  wash: (garmentIds: string[], dry: boolean, needsIroning?: boolean) => svc().wash(garmentIds, dry, needsIroning),
+  dried: (garmentIds: string[]) => svc().dried(garmentIds),
+  needsIroning: (garmentIds: string[]) => svc().needsIroning(garmentIds),
+  ironed: (garmentIds: string[]) => svc().ironed(garmentIds),
 
-  pairs: () => request<Pair[]>('GET', '/api/pairs'),
-  createPair: (body: Partial<Pair> & { name: string; garment_ids: string[] }) =>
-    request<Pair>('POST', '/api/pairs', body),
-  updatePair: (id: string, body: Partial<Pair> & { garment_ids?: string[] }) =>
-    request<Pair>('PATCH', `/api/pairs/${id}`, body),
-  deletePair: (id: string) => request<void>('DELETE', `/api/pairs/${id}`),
-  duplicatePair: (id: string) => request<Pair>('POST', `/api/pairs/${id}/duplicate`),
-  wearPair: (id: string, worn_on?: string) => request<Garment[]>('POST', `/api/pairs/${id}/wear`, { worn_on }),
+  pairs: () => svc().pairs(),
+  createPair: (body: Partial<Pair> & { name: string; garment_ids: string[] }) => svc().createPair(body),
+  updatePair: (id: string, body: Partial<Pair> & { garment_ids?: string[] }) => svc().updatePair(id, body),
+  deletePair: (id: string) => svc().deletePair(id),
+  duplicatePair: (id: string) => svc().duplicatePair(id),
+  wearPair: (id: string, wornOn?: string) => svc().wearPair(id, wornOn),
 
-  baskets: (status?: string, sort?: string) => request<Basket[]>('GET', `/api/baskets${qs({ status, sort })}`),
-  basket: (id: string) => request<Basket>('GET', `/api/baskets/${id}`),
-  createBasket: (body: Partial<Basket> & { name: string; garment_ids?: string[] }) =>
-    request<BasketMutation>('POST', '/api/baskets', body),
-  updateBasket: (id: string, body: Partial<Basket>) => request<Basket>('PATCH', `/api/baskets/${id}`, body),
-  deleteBasket: (id: string) => request<void>('DELETE', `/api/baskets/${id}`),
-  addToBasket: (id: string, garment_ids: string[]) =>
-    request<BasketMutation>('POST', `/api/baskets/${id}/items`, { garment_ids }),
-  removeFromBasket: (id: string, garmentId: string, confirm = false, restore_to?: GarmentState) =>
-    request<Basket>('POST', `/api/baskets/${id}/items/${garmentId}/remove`, { confirm, restore_to }),
-  startBasket: (id: string) => request<Basket>('POST', `/api/baskets/${id}/start`),
+  baskets: (status?: BasketStatus | string, sort?: string) => svc().baskets(status, sort),
+  basket: (id: string) => svc().basket(id),
+  createBasket: (body: Partial<Basket> & { name: string; garment_ids?: string[] }) => svc().createBasket(body),
+  updateBasket: (id: string, body: Partial<Basket>) => svc().updateBasket(id, body),
+  deleteBasket: (id: string) => svc().deleteBasket(id),
+  addToBasket: (id: string, garmentIds: string[]) => svc().addToBasket(id, garmentIds),
+  removeFromBasket: (id: string, garmentId: string, confirm = false, restoreTo?: GarmentState) =>
+    svc().removeFromBasket(id, garmentId, confirm, restoreTo),
+  startBasket: (id: string) => svc().startBasket(id),
   completeBasket: (
     id: string,
-    default_result: 'dry' | 'drying',
+    defaultResult: 'dry' | 'drying',
     outcomes: { garment_id: string; result: WashResult; needs_ironing?: boolean | null }[],
-  ) => request<Basket>('POST', `/api/baskets/${id}/complete`, { default_result, outcomes }),
+  ) => svc().completeBasket(id, defaultResult, outcomes),
 
-  aiStatus: () => request<AiStatus>('GET', '/api/ai/status'),
-  classify: (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<Classification>('POST', '/api/ai/classify', form)
-  },
-  generateOutfits: (body: OutfitRequest) =>
-    request<{ outfits: Outfit[]; notes: string[] }>('POST', '/api/outfits/generate', body),
-  outfitFeedback: (garment_ids: string[], rating: 1 | -1) =>
-    request<void>('POST', '/api/outfits/feedback', { garment_ids, rating }),
-  explainOutfit: (garment_ids: string[], occasion?: string | null, weather?: string[]) =>
-    request<Explanation>('POST', '/api/outfits/explain', { garment_ids, occasion, weather }),
+  aiStatus: () => svc().aiStatus(),
+  classify: async (file: File) => svc().classify(await fileToDataUrl(await downscaleImage(file, 1024, 0.85))),
+  generateOutfits: (body: OutfitRequest) => svc().generateOutfits(body),
+  outfitFeedback: (garmentIds: string[], rating: 1 | -1) => svc().outfitFeedback(garmentIds, rating),
+  explainOutfit: (garmentIds: string[], occasion?: string | null, weather?: string[]) => svc().explainOutfit(garmentIds, occasion, weather),
 
-  routines: () => request<Routine[]>('GET', '/api/routines'),
-  createRoutine: (body: RoutineInput) => request<Routine>('POST', '/api/routines', body),
-  updateRoutine: (id: string, body: RoutineInput) => request<Routine>('PUT', `/api/routines/${id}`, body),
-  deleteRoutine: (id: string) => request<void>('DELETE', `/api/routines/${id}`),
-  interpretRoutines: (text: string) =>
-    request<{ routines: RoutineDraft[]; questions: string[] }>('POST', '/api/routines/interpret', { text }),
-  checkRoutines: (routine?: RoutineInput, routine_id?: string, days = 14) =>
-    request<Feasibility>('POST', '/api/routines/check', { routine, routine_id, days }),
+  routines: () => svc().routines(),
+  createRoutine: (body: RoutineInput) => svc().createRoutine(body),
+  updateRoutine: (id: string, body: RoutineInput) => svc().updateRoutine(id, body),
+  deleteRoutine: (id: string) => svc().deleteRoutine(id),
+  interpretRoutines: (text: string) => svc().interpretRoutines(text),
+  checkRoutines: (routine?: RoutineInput, routineId?: string, days = 14) => svc().checkRoutines(routine, routineId, days),
 
-  events: (start?: string, end?: string) => request<CalendarEvent[]>('GET', `/api/events${qs({ start, end })}`),
-  createEvent: (body: CalendarEventInput) => request<CalendarEvent>('POST', '/api/events', body),
-  updateEvent: (id: string, body: CalendarEventInput) => request<CalendarEvent>('PUT', `/api/events/${id}`, body),
-  deleteEvent: (id: string) => request<void>('DELETE', `/api/events/${id}`),
+  events: (start?: string, end?: string) => svc().events(start, end),
+  createEvent: (body: CalendarEventInput) => svc().createEvent(body),
+  updateEvent: (id: string, body: CalendarEventInput) => svc().updateEvent(id, body),
+  deleteEvent: (id: string) => svc().deleteEvent(id),
 
-  settings: () => request<Settings>('GET', '/api/settings'),
-  saveSettings: (body: Settings) => request<Settings>('PUT', '/api/settings', body),
-  geocode: (q: string) =>
-    request<{ name: string; latitude: number; longitude: number }[]>('GET', `/api/weather/geocode${qs({ q })}`),
-  weather: (days: number, today: string) =>
-    request<{ location: string | null; error: string | null; days: WeatherDay[] }>('GET', `/api/weather${qs({ days: String(days), today })}`),
-  reportWeather: (date: string, tags: string[]) => request<void>('PUT', '/api/weather/reports', { date, tags }),
+  settings: () => svc().settings(),
+  saveSettings: (body: Settings) => svc().saveSettings(body),
+  updateSettings: (body: Partial<Settings>) => svc().updateSettings(body),
+  geocode: (q: string) => svc().geocode(q),
+  weather: (days: number, today: string) => svc().weather(days, today),
+  reportWeather: (date: string, tags: string[]) => svc().reportWeather(date, tags),
 
-  plan: (start: string, days: number, today: string) =>
-    request<Plan>('GET', `/api/plan${qs({ start, days: String(days), today })}`),
-  generatePlan: (start: string, days: number, today: string, dates?: string[]) =>
-    request<Plan>('POST', `/api/plan/generate${qs({ today })}`, { start, days, dates }),
-  saveEntry: (body: { date: string; slot_key: string; title: string; garment_ids: string[]; locked?: boolean }) =>
-    request<{ id: string }>('POST', '/api/plan/entries', body),
-  updateEntry: (id: string, body: { locked?: boolean; garment_ids?: string[]; status?: string }) =>
-    request<void>('PATCH', `/api/plan/entries/${id}`, body),
-  wearEntry: (id: string, today: string) => request<Garment[]>('POST', `/api/plan/entries/${id}/wear${qs({ today })}`),
-  simulate: (body: { basket_id?: string; garment_ids?: string[]; wash_on?: string; days?: number }, today: string) =>
-    request<Simulation>('POST', `/api/plan/simulate${qs({ today })}`, body),
+  plan: (start: string, days: number, today: string) => svc().plan(start, days, today),
+  generatePlan: (start: string, days: number, today: string, dates?: string[]) => svc().generatePlan(start, days, today, dates),
+  saveEntry: (body: { date: string; slot_key: string; title: string; garment_ids: string[]; locked?: boolean }) => svc().saveEntry(body),
+  updateEntry: (id: string, body: { locked?: boolean; garment_ids?: string[]; status?: string }) => svc().updateEntry(id, body),
+  wearEntry: (id: string, today: string) => svc().wearEntry(id, today),
+  simulate: (body: { basket_id?: string; garment_ids?: string[]; wash_on?: string; days?: number }, today: string) => svc().simulate(body, today),
 
-  coverage: (today: string) => request<Coverage>('GET', `/api/plan/coverage${qs({ today })}`),
-  brief: (today: string) => request<Brief>('POST', `/api/plan/brief${qs({ today })}`),
-  analytics: (days: number, today: string) => request<Analytics>('GET', `/api/analytics${qs({ days: String(days), today })}`),
-  packing: (
-    body: { start: string; nights: number; activities: string[]; laundry_available: boolean },
-    today: string,
-  ) => request<PackingResult>('POST', `/api/packing${qs({ today })}`, body),
-  purchase: (
-    body: { category: string; color?: string | null; pattern?: string | null; formality?: number | null; weather?: string[]; occasions?: string[] },
-    today: string,
-  ) => request<PurchaseResult>('POST', `/api/analysis/purchase${qs({ today })}`, body),
-  notifications: (today: string) => request<Reminder[]>('GET', `/api/notifications${qs({ today })}`),
-  updateSettings: (body: Partial<Settings>) => request<Settings>('PUT', '/api/settings', body),
-  deleteAccount: () => request<{ deleted: boolean; login_removed: boolean }>('DELETE', '/api/account?confirm=true'),
-  importBackup: (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return request<{ restored: Record<string, number> }>('POST', '/api/import?confirm=true', form)
+  coverage: (today: string) => svc().coverage(today),
+  brief: (today: string) => svc().brief(today),
+  analytics: (days: number, today: string) => svc().analytics(days, today),
+  packing: (body: { start: string; nights: number; activities: string[]; laundry_available: boolean }, today: string) => svc().packing(body, today),
+  purchase: (body: { category: string; color?: string | null; pattern?: string | null; formality?: number | null; weather?: string[]; occasions?: string[] }, today: string) =>
+    svc().purchase(body, today),
+  notifications: (today: string) => svc().notifications(today),
+  deleteAccount: () => svc().deleteAllData(),
+  importBackup: async (file: File) => {
+    let data: unknown
+    try {
+      data = JSON.parse(await file.text())
+    } catch {
+      throw new ApiError(422, "That file isn't valid JSON.", 'invalid')
+    }
+    if (!data || typeof data !== 'object') throw new ApiError(422, "That file isn't a ClosetIQ backup.", 'invalid')
+    return { restored: await svc().importData(data as Record<string, unknown>) }
   },
 }
 
-/** Downloads the full backup as a JSON file (photos included). */
+/** Save the full backup: share sheet on the phone, a download on the web. */
 export async function downloadBackup(): Promise<void> {
-  const headers: Record<string, string> = {}
-  const token = await getAccessToken()
-  if (token) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(`${BASE}/api/export?photos=true`, { headers })
-  if (!res.ok) throw new ApiError(res.status, 'Export failed')
-  const url = URL.createObjectURL(await res.blob())
+  const data = JSON.stringify(await svc().exportData(true))
+  const name = `closetiq-backup-${new Date().toISOString().slice(0, 10)}.json`
+  if (isNative) {
+    const written = await Filesystem.writeFile({ path: name, data, directory: Directory.Cache, encoding: Encoding.UTF8 })
+    await Share.share({ title: 'ClosetIQ backup', url: written.uri, dialogTitle: 'Save your ClosetIQ backup' })
+    return
+  }
+  const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }))
   const a = document.createElement('a')
   a.href = url
-  a.download = `closetiq-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = name
   a.click()
   URL.revokeObjectURL(url)
 }
 
-/** Shrinks a photo to fit within maxSide px as JPEG, to save upload time and AI tokens. */
-export async function downscaleImage(file: File, maxSide = 1024): Promise<File> {
+/** A garment photo as a displayable URL (fetched once, then cached). */
+export function usePhoto(photoId: string | null): string | null {
+  const s = (() => {
+    try {
+      return getService()
+    } catch {
+      return null
+    }
+  })()
+  const [url, setUrl] = useState<string | null>(() => (photoId && s ? s.cachedPhoto(photoId) : null))
+  useEffect(() => {
+    let alive = true
+    if (!photoId || !s) {
+      setUrl(null)
+      return
+    }
+    const hit = s.cachedPhoto(photoId)
+    if (hit) {
+      setUrl(hit)
+      return
+    }
+    void s.photoUrl(photoId).then((u) => alive && setUrl(u))
+    return () => {
+      alive = false
+    }
+  }, [photoId, s])
+  return url
+}
+
+function fileToDataUrl(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result))
+    r.onerror = () => reject(new ApiError(422, "Couldn't read that photo.", 'invalid'))
+    r.readAsDataURL(file)
+  })
+}
+
+async function fileToBase64(file: Blob): Promise<{ mime: string; base64: string }> {
+  const url = await fileToDataUrl(file)
+  const m = url.match(/^data:([^;]+);base64,(.*)$/)
+  if (!m) throw new ApiError(422, "Couldn't read that photo.", 'invalid')
+  return { mime: m[1], base64: m[2] }
+}
+
+/** Shrinks a photo to fit within maxSide px as JPEG, to save space and AI tokens. */
+export async function downscaleImage(file: File, maxSide = 1024, quality = 0.85): Promise<File> {
   try {
     const bitmap = await createImageBitmap(file)
     const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
@@ -250,9 +194,9 @@ export async function downscaleImage(file: File, maxSide = 1024): Promise<File> 
     canvas.height = Math.round(bitmap.height * scale)
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     bitmap.close()
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
     return blob ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file
   } catch {
-    return file // unsupported format in this browser: send as-is and let the server validate
+    return file // unsupported format here: send as-is and let validation decide
   }
 }
